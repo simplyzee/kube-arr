@@ -1,9 +1,10 @@
 {{- include "kube-arr.validate" . -}}
-{{- $mediaSource := include "kube-arr.mediaSource" . -}}
+{{- $transcode := include "kube-arr.transcodeEnabled" . }}
 {{- range $name := include "kube-arr.enabledApps" . | fromJsonArray }}
 {{- $ctx := dict "root" $ "name" $name }}
 {{- $app := include "kube-arr.app" $ctx | fromYaml }}
 {{- $fullName := include "kube-arr.appName" $ctx }}
+{{- $dispatch := and $transcode (eq $name $.Values.mediaServer) }}
 {{- if not $app.config.existingClaim }}
 ---
 apiVersion: v1
@@ -64,11 +65,38 @@ spec:
     metadata:
       labels:
         {{- include "kube-arr.labels" $ctx | nindent 8 }}
-      {{- with $app.podAnnotations }}
+      {{- if or $app.podAnnotations $dispatch }}
       annotations:
+        {{- if $dispatch }}
+        checksum/transcode: {{ include "kube-arr.transcodeConfig" $ | sha256sum }}
+        {{- end }}
+        {{- with $app.podAnnotations }}
         {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
     spec:
+      {{- if $dispatch }}
+      # Lets the dispatcher create and clean up transcode pods.
+      serviceAccountName: {{ $fullName }}
+      automountServiceAccountToken: true
+      initContainers:
+        # Hands the dispatcher binary to the media server.
+        - name: install-transcoder
+          image: {{ include "kube-arr.dispatcherImage" $ | quote }}
+          imagePullPolicy: {{ $.Values.transcode.dispatcher.image.pullPolicy }}
+          args: ["install", "/kube-arr/bin/kube-arr-transcoder"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: kube-arr-bin
+              mountPath: /kube-arr/bin
+      {{- else }}
+      # The apps never talk to the Kubernetes API.
+      automountServiceAccountToken: false
+      {{- end }}
       {{- with $.Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -145,17 +173,21 @@ spec:
             - name: config
               mountPath: /config
             {{- if $app.mountMedia }}
-            - name: media
-              mountPath: {{ $.Values.media.mountPath }}
-              {{- if $app.mediaReadOnly }}
+            - {{- include "kube-arr.mediaMount" (dict "root" $ "readOnly" $app.mediaReadOnly) | nindent 14 }}
+            {{- end }}
+            {{- if $dispatch }}
+            - name: kube-arr-bin
+              mountPath: /kube-arr/bin
               readOnly: true
-              {{- end }}
-              {{- if eq $mediaSource "hostPath" }}
-              mountPropagation: {{ $.Values.media.hostPath.mountPropagation }}
-              {{- else if eq $mediaSource "rclone" }}
-              # See the FUSE mount kube-rclone makes on the node.
-              mountPropagation: HostToContainer
-              {{- end }}
+            - name: transcode-config
+              mountPath: /kube-arr/config
+              readOnly: true
+            - name: transcode-init
+              mountPath: /custom-cont-init.d
+              readOnly: true
+            - name: podinfo
+              mountPath: /kube-arr/podinfo
+              readOnly: true
             {{- end }}
             {{- with $app.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
@@ -165,24 +197,36 @@ spec:
           persistentVolumeClaim:
             claimName: {{ $app.config.existingClaim | default (printf "%s-config" $fullName) }}
         {{- if $app.mountMedia }}
-        - name: media
-          {{- if eq $mediaSource "nfs" }}
-          nfs:
-            server: {{ $.Values.media.nfs.server }}
-            path: {{ $.Values.media.nfs.path }}
-          {{- else if eq $mediaSource "hostPath" }}
-          hostPath:
-            path: {{ $.Values.media.hostPath.path }}
-            type: Directory
-          {{- else if eq $mediaSource "rclone" }}
-          hostPath:
-            # Mounted by the kube-rclone DaemonSet on every node.
-            path: {{ $.Values.rclone.rclone.path }}
-            type: DirectoryOrCreate
-          {{- else }}
-          persistentVolumeClaim:
-            claimName: {{ include "kube-arr.mediaClaimName" $ }}
-          {{- end }}
+        - {{- include "kube-arr.mediaVolume" $ | nindent 10 }}
+        {{- end }}
+        {{- if $dispatch }}
+        - name: kube-arr-bin
+          emptyDir: {}
+        - name: transcode-config
+          configMap:
+            name: {{ $fullName }}-transcode
+            items:
+              - key: transcoder.json
+                path: transcoder.json
+        - name: transcode-init
+          configMap:
+            name: {{ $fullName }}-transcode
+            defaultMode: 0755
+            items:
+              - key: 50-kube-arr-transcoder
+                path: 50-kube-arr-transcoder
+        - name: podinfo
+          downwardAPI:
+            items:
+              - path: namespace
+                fieldRef:
+                  fieldPath: metadata.namespace
+              - path: name
+                fieldRef:
+                  fieldPath: metadata.name
+              - path: uid
+                fieldRef:
+                  fieldPath: metadata.uid
         {{- end }}
         {{- with $app.extraVolumes }}
         {{- toYaml . | nindent 8 }}

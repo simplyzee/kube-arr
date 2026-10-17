@@ -1,0 +1,66 @@
+name: Transcoder image
+
+# Builds ghcr.io/simplyzee/kube-arr-transcoder for amd64 and arm64.
+# Pull requests only build; main pushes publish, tagged with the chart
+# version so each chart release pulls the dispatcher it was tested with.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - transcoder/**
+      - kube-arr/Chart.yaml
+      - .github/workflows/image.yaml
+  pull_request:
+    paths:
+      - transcoder/**
+      - .github/workflows/image.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/simplyzee/kube-arr-transcoder
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tags
+        id: tags
+        run: |
+          version=$(awk '/^version:/ {print $2}' kube-arr/Chart.yaml)
+          {
+            echo "tags<<EOF"
+            echo "${IMAGE}:${version}"
+            echo "${IMAGE}:sha-${GITHUB_SHA::7}"
+            echo "${IMAGE}:latest"
+            echo "EOF"
+            echo "version=${version}"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: transcoder
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.tags.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

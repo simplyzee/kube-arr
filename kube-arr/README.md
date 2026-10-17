@@ -164,6 +164,36 @@ jellyfin:
     privileged: true
 ```
 
+## Transcode dispatch
+
+Set `transcode.enabled=true` and Plex, Jellyfin or Emby stops transcoding inside its own pod. Each transcode runs as a separate, short-lived Kubernetes pod instead, with its own resources and scheduling, so a few 4K streams don't starve the server, and transcodes can go to a GPU node or a bigger machine. The idea comes from [kube-plex](https://github.com/munnerz/kube-plex), extended here to all three servers.
+
+```bash
+helm upgrade media simplyzee/kube-arr -n media --reuse-values \
+  --set transcode.enabled=true
+```
+
+How it works:
+
+- A small dispatcher, [`kube-arr-transcoder`](https://github.com/simplyzee/kube-arr/tree/main/transcoder), takes the place of the server's transcoder (`Plex Transcoder`, or `ffmpeg` for Jellyfin and Emby). The original is kept alongside it.
+- When the server starts a real transcode, the dispatcher creates a pod from the server's own image with the same arguments, environment and working directory, mounting the server's config and media volumes, then streams the pod's output back so progress shows as normal.
+- Quick capability checks (`-version`, `-encoders` and so on) and anything piped straight back to the server still run locally.
+- Stopping playback stops the pod. If the dispatcher is killed outright, a watchdog deletes the pod anyway, and every pod is owned by the server pod so it's cleaned up with it.
+- If a pod can't start in time (no capacity, image pull failure), the transcode runs locally instead. Set `transcode.fallbackToLocal=false` to turn that off.
+
+Things to know:
+
+- **Plex:** transcode pods report progress back over the network. In Plex, add your pod network (for example `10.0.0.0/8`) under *Settings > Network > List of IP addresses and networks that are allowed without auth*, or transcodes start and then stall.
+- **Storage:** all three servers write transcodes into their config volume, so transcode pods mount it too. With ReadWriteOnce storage they run on the server's node (`transcode.sameNodeAsServer=true`, the default). Use ReadWriteMany storage for the server's config to send them anywhere, then set `sameNodeAsServer=false` and pick nodes with `transcode.nodeSelector`, `.tolerations` or `.affinity`.
+- **GPUs:** transcode pods get the server's `extraVolumes`, `extraVolumeMounts` and `securityContext`, so the hardware setup below applies to them too. Add a GPU resource such as `gpu.intel.com/i915: 1` under `transcode.resources` if you use a device plugin.
+- **Permissions:** the server gets a service account that can create, read and delete pods in its namespace, and nothing else. Without transcode dispatch no app mounts a service account token.
+
+Watch transcodes come and go:
+
+```bash
+kubectl get pods -n media -l app.kubernetes.io/component=transcode -w
+```
+
 ## Parameters
 
 ### Global
@@ -202,6 +232,21 @@ jellyfin:
 | `rclone.rclone.readOnly` | Mount read-only | `false` |
 | `rclone.rclone.additionalArgs` | rclone mount flags | VFS full cache, 50G, `--uid=1000 --gid=1000 --umask=002` |
 | `rclone.*` | Any other kube-rclone setting | see kube-rclone |
+
+### Transcode dispatch
+
+| Parameter | Description | Default |
+|---|---|---|
+| `transcode.enabled` | Run the media server's transcodes as their own pods | `false` |
+| `transcode.dispatcher.image.repository`, `.tag`, `.pullPolicy` | Dispatcher image; tag defaults to the chart version | `ghcr.io/simplyzee/kube-arr-transcoder`, `""` |
+| `transcode.binary` | Transcoder path in the server image, if it's not the usual one | `""` |
+| `transcode.fallbackToLocal` | Transcode locally if a pod can't start | `true` |
+| `transcode.startTimeoutSeconds` | How long a pod may stay pending before falling back | `60` |
+| `transcode.maxDurationSeconds` | Hard limit for one transcode pod | `21600` |
+| `transcode.sameNodeAsServer` | Keep pods on the server's node (needed for ReadWriteOnce config) | `true` |
+| `transcode.resources` | Transcode pod resources | 1 CPU, 1Gi requested; 4Gi limit |
+| `transcode.nodeSelector`, `.tolerations`, `.affinity` | Transcode pod scheduling (`affinity` replaces `sameNodeAsServer`) | global settings |
+| `transcode.podAnnotations`, `.env` | Extra annotations and environment for transcode pods | empty |
 
 ### Ingress
 

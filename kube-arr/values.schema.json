@@ -1315,6 +1315,83 @@
           }
         }
       }
+    },
+    "transcode": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "dispatcher": {
+          "type": "object",
+          "properties": {
+            "image": {
+              "type": "object",
+              "properties": {
+                "repository": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "tag": {
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                },
+                "pullPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "binary": {
+          "type": "string"
+        },
+        "fallbackToLocal": {
+          "type": "boolean"
+        },
+        "startTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 5
+        },
+        "maxDurationSeconds": {
+          "type": "integer",
+          "minimum": 60
+        },
+        "sameNodeAsServer": {
+          "type": "boolean"
+        },
+        "resources": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "nodeSelector": {
+          "type": "object"
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object"
+        },
+        "env": {
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      }
     }
   }
 }

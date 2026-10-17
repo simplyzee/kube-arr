@@ -9,6 +9,20 @@ permissions:
   contents: read
 
 jobs:
+  dispatcher-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: transcoder/go.mod
+      - name: go vet and test
+        working-directory: transcoder
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; echo "run gofmt"; exit 1; }
+          go vet ./...
+          go test -count=1 -v ./...
+
   lint-and-validate:
     runs-on: ubuntu-latest
     steps:
@@ -53,6 +67,14 @@ jobs:
           helm template media kube-arr -f kube-arr/ci/rclone-values.yaml | grep -q '^kind: DaemonSet'
           helm template media kube-arr -f kube-arr/ci/rclone-values.yaml | grep -q 'mountPropagation: HostToContainer'
           ! helm template media kube-arr | grep -q '^kind: DaemonSet'   # rclone off by default
+          # Transcode dispatch: RBAC, swap hook and dispatcher only when enabled
+          t=$(helm template media kube-arr -f kube-arr/ci/transcode-plex-values.yaml)
+          echo "$t" | grep -q '^kind: Role$'
+          echo "$t" | grep -q 'name: install-transcoder'
+          echo "$t" | grep -q 'mountPath: /custom-cont-init.d'
+          echo "$t" | grep -q '"serverUrl": "http://media-plex:32400"'
+          ! helm template media kube-arr | grep -q 'install-transcoder'
+          [ "$(helm template media kube-arr | grep -c 'automountServiceAccountToken: false')" -ge 5 ]
           helm template media kube-arr -f kube-arr/ci/everything-plex-ingress-values.yaml | grep -q 'host: "sonarr.home.example.com"'
 
       - name: Artifact Hub image list matches the chart
@@ -61,7 +83,8 @@ jobs:
             kube-arr/ci/defaults-values.yaml \
             kube-arr/ci/everything-plex-ingress-values.yaml \
             kube-arr/ci/rclone-emby-values.yaml \
-            kube-arr/ci/rclone-values.yaml
+            kube-arr/ci/rclone-values.yaml \
+            kube-arr/ci/transcode-plex-values.yaml
 
       - name: Bad values fail with clear messages
         run: |
@@ -86,6 +109,8 @@ jobs:
           grep -Eq "needs your rclone config|no rclone config found" err.txt
           expect_fail -f kube-arr/ci/rclone-values.yaml --set media.hostPath.path=/mnt/x
           grep -q "only one of" err.txt
+          expect_fail --set transcode.enabled=true --set mediaServer=none
+          grep -q "transcode.enabled needs a media server" err.txt
 
       - name: Package
         run: helm package kube-arr --destination dist
@@ -201,4 +226,70 @@ jobs:
           kubectl describe pods
           kubectl logs ds/media-rclone -c rclone --tail=100 || true
           for d in $(kubectl get deploy -o name); do echo "== $d"; kubectl logs "$d" --tail=50 || true; done
+
+  transcode-smoke-test:
+    # Builds the dispatcher, installs each media server with transcode
+    # dispatch in kind, and runs transcodes through it.
+    needs: [dispatcher-tests, lint-and-validate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [jellyfin, emby, plex]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Fetch chart dependencies (kube-rclone)
+        run: |
+          helm repo add simplyzee https://charts.simplyzee.dev
+          helm dependency update kube-arr
+
+      - name: Build the dispatcher image
+        run: docker build -t ghcr.io/simplyzee/kube-arr-transcoder:ci transcoder
+
+      - uses: helm/kind-action@v1
+
+      - name: Install ${{ matrix.server }} with transcode dispatch
+        run: |
+          kind load docker-image ghcr.io/simplyzee/kube-arr-transcoder:ci --name chart-testing
+          helm install media kube-arr --wait --timeout 15m \
+            --set mediaServer=${{ matrix.server }} \
+            --set sonarr.enabled=false --set radarr.enabled=false \
+            --set bazarr.enabled=false --set prowlarr.enabled=false \
+            --set transcode.enabled=true \
+            --set transcode.dispatcher.image.tag=ci \
+            --set transcode.dispatcher.image.pullPolicy=Never \
+            --set transcode.resources.requests.cpu=100m \
+            --set transcode.resources.requests.memory=128Mi \
+            --set media.persistence.size=1Gi \
+            --set ${{ matrix.server }}.config.size=1Gi
+          kubectl get pods -o wide
+          kubectl logs deploy/media-${{ matrix.server }} -c ${{ matrix.server }} | grep "kube-arr" || true
+
+      - name: Transcodes run as pods
+        run: |
+          set -o pipefail
+          .github/scripts/transcode-e2e.sh ${{ matrix.server }} 2>&1 | tee e2e.log
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          # Also raised as annotations so they show on the PR's checks page.
+          annotate() {
+            title=$1; shift
+            body=$("$@" 2>&1 | tr -d '\r' | tail -n 60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=${{ matrix.server }}: $title::$body"
+          }
+          annotate "e2e output" cat e2e.log || true
+          annotate "server log" kubectl logs deploy/media-${{ matrix.server }} -c ${{ matrix.server }} --tail=80 || true
+          annotate "pods" kubectl get pods -o wide || true
+          annotate "transcode pods" kubectl describe pods -l app.kubernetes.io/component=transcode || true
+          annotate "events" kubectl get events --sort-by=.lastTimestamp || true
+          kubectl get pods -o wide
+          kubectl describe pods
+          kubectl logs deploy/media-${{ matrix.server }} -c ${{ matrix.server }} --tail=200 || true
+          kubectl logs deploy/media-${{ matrix.server }} -c install-transcoder || true
 

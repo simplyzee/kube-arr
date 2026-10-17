@@ -2,7 +2,7 @@ apiVersion: v2
 name: kube-arr
 description: Your *arr media stack on Kubernetes. Sonarr, Radarr, Prowlarr, Bazarr, Jackett, Lidarr and Plex, Jellyfin or Emby, each optional, sharing one media volume
 type: application
-version: 0.2.0
+version: 0.3.0
 appVersion: "2026.10"
 kubeVersion: ">=1.25.0-0"
 keywords:
@@ -19,6 +19,8 @@ keywords:
   - homelab
   - arr
   - rclone
+  - transcode
+  - gpu
 home: https://github.com/simplyzee/kube-arr
 sources:
   - https://github.com/simplyzee/kube-arr
@@ -59,11 +61,19 @@ annotations:
       image: lscr.io/linuxserver/emby:version-4.10.1.0
     - name: rclone
       image: rclone/rclone:1.75.2
+    - name: kube-arr-transcoder
+      image: ghcr.io/simplyzee/kube-arr-transcoder:0.3.0
   artifacthub.io/links: |
     - name: support
       url: https://github.com/simplyzee/kube-arr/issues
     - name: kube-rclone (mount cloud storage as the media volume)
       url: https://github.com/simplyzee/kube-rclone
+    - name: kube-plex (the idea behind transcode dispatch)
+      url: https://github.com/munnerz/kube-plex
   artifacthub.io/changes: |
     - kind: added
-      description: Optional kube-rclone dependency (rclone.enabled) that mounts cloud storage on every node and uses it as the shared media volume
+      description: Transcode dispatch (transcode.enabled) runs Plex, Jellyfin and Emby transcodes as their own Kubernetes pods, so they can be scheduled on other nodes, GPU nodes or with their own limits. Inspired by kube-plex
+    - kind: added
+      description: kube-arr-transcoder image (ghcr.io/simplyzee/kube-arr-transcoder), a small dependency-free dispatcher that swaps in for the server's transcoder
+    - kind: changed
+      description: Pods no longer mount a service account token unless transcode dispatch needs one

@@ -47,4 +47,26 @@ In Prowlarr, add Sonarr, Radarr and Lidarr under Settings > Apps using the
 addresses above, and it will sync your indexers to them.
 {{- end }}
 
+{{- if include "kube-arr.transcodeEnabled" . }}
+{{- $server := .Values.mediaServer }}
+
+Transcode dispatch is on: {{ $server }} transcodes run as their own pods.
+Watch them come and go with:
+
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/component=transcode,app.kubernetes.io/instance={{ .Release.Name }} -w
+{{- if eq $server "plex" }}
+
+Plex: transcode pods report progress back over the network, so in Plex go to
+Settings > Network > "List of IP addresses and networks that are allowed
+without auth" and add your pod network (for example 10.0.0.0/8). Without it,
+transcodes start but playback stalls.
+{{- end }}
+{{- if .Values.transcode.sameNodeAsServer }}
+
+Transcode pods run on the same node as {{ $server }} so they can share its
+config volume. To spread them across nodes, use ReadWriteMany storage for
+{{ $server }}.config and set transcode.sameNodeAsServer=false.
+{{- end }}
+{{- end }}
+
 Set up authentication in each app before exposing it outside the cluster.

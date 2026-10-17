@@ -13,17 +13,23 @@ helm install media simplyzee/kube-arr -n media --create-namespace \
 - **One install, any mix of apps.** Switch each app on or off, and choose Plex, Jellyfin, Emby or no media server.
 - **One shared media volume** mounted at the same path everywhere, so imports are instant moves or hardlinks, not copies. It can be a new PVC, an existing one, NFS, or a disk on the node.
 - **Built-in cloud storage.** Set `rclone.enabled=true` and kube-arr runs [kube-rclone](https://github.com/simplyzee/kube-rclone) for you, mounting Google Drive, S3, Dropbox or any rclone remote on every node as your media library.
+- **Transcodes as pods.** Set `transcode.enabled=true` and Plex, Jellyfin or Emby runs each transcode as its own pod, so heavy streams get their own resources and can land on a GPU node. Inspired by [kube-plex](https://github.com/munnerz/kube-plex).
 - **The apps find each other.** Each gets a stable in-cluster address, such as `http://media-sonarr:8989`, ready to paste into Prowlarr or Bazarr.
 - **Your data is safe.** Config and media volumes are kept when you uninstall.
 - **Ready to expose.** Set `ingress.domain` and each app appears at `sonarr.<domain>`, `radarr.<domain>` and so on, with TLS.
 - **Sensible defaults:** pinned LinuxServer.io images, probes, Recreate updates for the SQLite databases, read-only media for the media server, and a values schema with clear errors.
-- **Tested on every change:** a real install in a kind cluster checks every app responds and that they share the volume.
+- **Tested on every change:** a real install in a kind cluster checks every app responds and that they share the volume, and runs real transcodes through Plex, Jellyfin and Emby as pods.
 
-See the [chart README](kube-arr/README.md) for storage options, wiring the apps together, Plex claiming, hardware transcoding and every setting.
+See the [chart README](kube-arr/README.md) for storage options, wiring the apps together, Plex claiming, hardware transcoding, transcode dispatch and every setting.
+
+## Repository layout
+
+- [`kube-arr/`](kube-arr) is the Helm chart.
+- [`transcoder/`](transcoder) is `kube-arr-transcoder`, the dependency-free Go dispatcher behind transcode dispatch, published as `ghcr.io/simplyzee/kube-arr-transcoder`.
 
 ## Contributing
 
-Issues and pull requests are welcome.
+Issues and pull requests are welcome. `cd transcoder && go test ./...` runs the dispatcher's tests.
 
 ## Licence
 
