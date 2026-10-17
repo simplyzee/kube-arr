@@ -270,11 +270,24 @@ jobs:
           kubectl logs deploy/media-${{ matrix.server }} -c ${{ matrix.server }} | grep "kube-arr" || true
 
       - name: Transcodes run as pods
-        run: .github/scripts/transcode-e2e.sh ${{ matrix.server }}
+        run: |
+          set -o pipefail
+          .github/scripts/transcode-e2e.sh ${{ matrix.server }} 2>&1 | tee e2e.log
 
       - name: Diagnostics on failure
         if: failure()
         run: |
+          # Also raised as annotations so they show on the PR's checks page.
+          annotate() {
+            title=$1; shift
+            body=$("$@" 2>&1 | tr -d '\r' | tail -n 60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=${{ matrix.server }}: $title::$body"
+          }
+          annotate "e2e output" cat e2e.log || true
+          annotate "server log" kubectl logs deploy/media-${{ matrix.server }} -c ${{ matrix.server }} --tail=80 || true
+          annotate "pods" kubectl get pods -o wide || true
+          annotate "transcode pods" kubectl describe pods -l app.kubernetes.io/component=transcode || true
+          annotate "events" kubectl get events --sort-by=.lastTimestamp || true
           kubectl get pods -o wide
           kubectl describe pods
           kubectl logs deploy/media-${{ matrix.server }} -c ${{ matrix.server }} --tail=200 || true
