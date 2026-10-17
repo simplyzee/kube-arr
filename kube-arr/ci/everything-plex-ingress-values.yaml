@@ -1,0 +1,30 @@
+# CI: every app, Plex, NFS media, Ingress with TLS, apps spread across nodes.
+global:
+  timezone: Europe/London
+  colocate: false
+media:
+  nfs:
+    server: nas.home.lan
+    path: /volume1/data
+lidarr:
+  enabled: true
+jackett:
+  enabled: true
+mediaServer: plex
+plex:
+  claimSecret:
+    name: plex-claim
+  advertiseUrl: https://plex.home.example.com:443
+  service:
+    type: LoadBalancer
+ingress:
+  enabled: true
+  className: nginx
+  domain: home.example.com
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+  tls:
+    enabled: true
+bazarr:
+  ingress:
+    enabled: false

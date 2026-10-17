@@ -1,0 +1,237 @@
+{{- include "kube-arr.validate" . -}}
+{{- $mediaSource := include "kube-arr.mediaSource" . -}}
+{{- range $name := include "kube-arr.enabledApps" . | fromJsonArray }}
+{{- $ctx := dict "root" $ "name" $name }}
+{{- $app := include "kube-arr.app" $ctx | fromYaml }}
+{{- $fullName := include "kube-arr.appName" $ctx }}
+{{- if not $app.config.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullName }}-config
+  labels:
+    {{- include "kube-arr.labels" $ctx | nindent 4 }}
+  annotations:
+    # App settings and databases survive `helm uninstall`.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with $app.config.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $app.config.size }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "kube-arr.labels" $ctx | nindent 4 }}
+  {{- with $app.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $app.service.type }}
+  selector:
+    {{- include "kube-arr.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $app.port }}
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "kube-arr.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  # The apps keep SQLite databases on a ReadWriteOnce volume; never run two at once.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "kube-arr.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kube-arr.labels" $ctx | nindent 8 }}
+      {{- with $app.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.global.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: "{{ $app.image.repository }}:{{ $app.image.tag }}"
+          imagePullPolicy: {{ $app.image.pullPolicy }}
+          env:
+            - name: PUID
+              value: {{ $.Values.global.puid | quote }}
+            - name: PGID
+              value: {{ $.Values.global.pgid | quote }}
+            - name: TZ
+              value: {{ $.Values.global.timezone | quote }}
+            - name: UMASK
+              value: {{ $.Values.global.umask | quote }}
+            {{- if eq $name "plex" }}
+            {{- if $app.claimSecret.name }}
+            - name: PLEX_CLAIM
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $app.claimSecret.name }}
+                  key: {{ $app.claimSecret.key }}
+            {{- else if $app.claimToken }}
+            - name: PLEX_CLAIM
+              value: {{ $app.claimToken | quote }}
+            {{- end }}
+            {{- with $app.advertiseUrl }}
+            - name: ADVERTISE_IP
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if eq $name "jellyfin" }}
+            {{- with $app.publishedServerUrl }}
+            - name: JELLYFIN_PublishedServerUrl
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with $app.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ $app.port }}
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 30
+            failureThreshold: 5
+          {{- with $app.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $app.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            {{- if $app.mountMedia }}
+            - name: media
+              mountPath: {{ $.Values.media.mountPath }}
+              {{- if $app.mediaReadOnly }}
+              readOnly: true
+              {{- end }}
+              {{- if eq $mediaSource "hostPath" }}
+              mountPropagation: {{ $.Values.media.hostPath.mountPropagation }}
+              {{- end }}
+            {{- end }}
+            {{- with $app.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ $app.config.existingClaim | default (printf "%s-config" $fullName) }}
+        {{- if $app.mountMedia }}
+        - name: media
+          {{- if eq $mediaSource "nfs" }}
+          nfs:
+            server: {{ $.Values.media.nfs.server }}
+            path: {{ $.Values.media.nfs.path }}
+          {{- else if eq $mediaSource "hostPath" }}
+          hostPath:
+            path: {{ $.Values.media.hostPath.path }}
+            type: Directory
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ include "kube-arr.mediaClaimName" $ }}
+          {{- end }}
+        {{- end }}
+        {{- with $app.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $.Values.global.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.global.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $.Values.global.colocate }}
+      affinity:
+        # Schedule every app in this release onto the same node, so they can
+        # all mount a ReadWriteOnce media volume.
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: {{ $.Release.Name }}
+                  app.kubernetes.io/part-of: {{ include "kube-arr.name" $ }}
+      {{- end }}
+{{- if and $.Values.ingress.enabled $app.ingress.enabled }}
+{{- $host := $app.ingress.hostname | default (printf "%s.%s" $name $.Values.ingress.domain) }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "kube-arr.labels" $ctx | nindent 4 }}
+  {{- with $.Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $.Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if $.Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ $host | quote }}
+      secretName: {{ $.Values.ingress.tls.secretName | default (printf "%s-tls" $fullName) }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullName }}
+                port:
+                  name: http
+{{- end }}
+{{- end }}

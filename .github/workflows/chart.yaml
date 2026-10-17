@@ -1,0 +1,129 @@
+name: chart
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kubeconform
+
+      - name: helm lint (every CI values file)
+        run: |
+          for f in kube-arr/ci/*.yaml; do
+            echo "::group::helm lint -f $f"
+            helm lint kube-arr --strict -f "$f"
+            echo "::endgroup::"
+          done
+
+      - name: Render and validate against Kubernetes schemas
+        run: |
+          for f in kube-arr/ci/*.yaml; do
+            echo "::group::$f"
+            helm template media kube-arr -f "$f" > rendered.yaml
+            cat rendered.yaml
+            kubeconform -strict -summary -kubernetes-version 1.30.0 rendered.yaml
+            echo "::endgroup::"
+          done
+
+      - name: Each values file renders the expected apps
+        run: |
+          count() { helm template media kube-arr -f "$1" | grep -c '^kind: Deployment'; }
+          [ "$(count kube-arr/ci/defaults-values.yaml)" = 5 ]                 # sonarr radarr bazarr prowlarr jellyfin
+          [ "$(count kube-arr/ci/everything-plex-ingress-values.yaml)" = 7 ]  # all six + plex
+          [ "$(count kube-arr/ci/existing-claims-values.yaml)" = 3 ]          # sonarr bazarr prowlarr
+          helm template media kube-arr -f kube-arr/ci/everything-plex-ingress-values.yaml | grep -q 'host: "sonarr.home.example.com"'
+
+      - name: Bad values fail with clear messages
+        run: |
+          expect_fail() {
+            if helm template media kube-arr "$@" > /dev/null 2> err.txt; then
+              echo "expected failure for: $*"; exit 1
+            fi
+            cat err.txt
+          }
+          expect_fail --set mediaServer=kodi
+          expect_fail --set media.existingClaim=a --set media.hostPath.path=/mnt/x
+          grep -q "only one of" err.txt
+          expect_fail --set media.nfs.server=nas
+          grep -q "nfs.path is required" err.txt
+          expect_fail --set ingress.enabled=true
+          grep -q "has no hostname" err.txt
+          expect_fail --set sonarr.enabled=false --set radarr.enabled=false --set bazarr.enabled=false \
+                      --set prowlarr.enabled=false --set mediaServer=none
+          grep -q "no apps are enabled" err.txt
+
+      - name: Package
+        run: helm package kube-arr --destination dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kube-arr-chart
+          path: dist/*.tgz
+
+  smoke-test:
+    # Installs the default stack in a throwaway kind cluster and checks every
+    # app answers over HTTP and that they really share the media volume.
+    needs: lint-and-validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - uses: helm/kind-action@v1
+
+      - name: Install the default stack
+        run: |
+          helm install media kube-arr --wait --timeout 15m \
+            --set media.persistence.size=1Gi \
+            --set appDefaults.config.size=256Mi \
+            --set jellyfin.config.size=256Mi
+          kubectl get pods -o wide
+
+      - name: Every app answers over HTTP
+        run: |
+          for svc in media-sonarr:8989 media-radarr:7878 media-bazarr:6767 media-prowlarr:9696 media-jellyfin:8096; do
+            for i in $(seq 1 30); do
+              code=$(kubectl run "probe-$RANDOM" --rm -i --restart=Never --quiet --image=curlimages/curl -- \
+                curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://$svc/" || true)
+              case "$code" in 2??|3??|401) echo "$svc -> $code"; break;; esac
+              [ "$i" = 30 ] && { echo "$svc never answered (last: $code)"; exit 1; }
+              sleep 5
+            done
+          done
+
+      - name: Apps share the media volume
+        run: |
+          kubectl exec deploy/media-sonarr -- sh -c 'mkdir -p /data/media/tv && echo hello > /data/media/tv/check.txt'
+          kubectl exec deploy/media-radarr -- cat /data/media/tv/check.txt | grep -q hello
+          kubectl exec deploy/media-jellyfin -- cat /data/media/tv/check.txt | grep -q hello
+          if kubectl exec deploy/media-jellyfin -- sh -c 'touch /data/should-fail' 2>/dev/null; then
+            echo "media server should mount media read-only"; exit 1
+          fi
+          echo "shared volume OK, media server read-only OK"
+
+      - name: Prowlarr doesn't mount media
+        run: |
+          ! kubectl exec deploy/media-prowlarr -- test -d /data/media
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods,pvc,svc -o wide
+          kubectl describe pods
+          for d in $(kubectl get deploy -o name); do echo "== $d"; kubectl logs "$d" --tail=50 || true; done
