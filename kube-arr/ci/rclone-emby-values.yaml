@@ -1,0 +1,20 @@
+# CI: media from a kube-rclone hostPath mount, Emby with GPU, resources set.
+media:
+  hostPath:
+    path: /mnt/disks/gdrive
+mediaServer: emby
+emby:
+  extraVolumes:
+    - name: dri
+      hostPath:
+        path: /dev/dri
+  extraVolumeMounts:
+    - name: dri
+      mountPath: /dev/dri
+  securityContext:
+    privileged: true
+appDefaults:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi

@@ -1,0 +1,27 @@
+{{- if eq (include "kube-arr.mediaSource" .) "managed" }}
+{{- $needsMedia := false }}
+{{- range $name := include "kube-arr.enabledApps" . | fromJsonArray }}
+{{- $app := include "kube-arr.app" (dict "root" $ "name" $name) | fromYaml }}
+{{- if $app.mountMedia }}{{ $needsMedia = true }}{{ end }}
+{{- end }}
+{{- if $needsMedia }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "kube-arr.mediaClaimName" . }}
+  labels:
+    {{- include "kube-arr.releaseLabels" . | nindent 4 }}
+  annotations:
+    # Your library survives `helm uninstall`.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    {{- toYaml .Values.media.persistence.accessModes | nindent 4 }}
+  {{- with .Values.media.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.media.persistence.size }}
+{{- end }}
+{{- end }}

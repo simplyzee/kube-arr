@@ -1,0 +1,1283 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "global": {
+      "type": "object",
+      "properties": {
+        "timezone": {
+          "type": "string"
+        },
+        "puid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pgid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "umask": {
+          "type": "string",
+          "pattern": "^[0-7]{3,4}$"
+        },
+        "imagePullSecrets": {
+          "type": "array"
+        },
+        "colocate": {
+          "type": "boolean"
+        },
+        "podSecurityContext": {
+          "type": "object"
+        },
+        "nodeSelector": {
+          "type": "object"
+        },
+        "tolerations": {
+          "type": "array"
+        }
+      }
+    },
+    "media": {
+      "type": "object",
+      "properties": {
+        "mountPath": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "existingClaim": {
+          "type": "string"
+        },
+        "nfs": {
+          "type": "object",
+          "properties": {
+            "server": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            }
+          }
+        },
+        "hostPath": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "mountPropagation": {
+              "type": "string",
+              "enum": [
+                "None",
+                "HostToContainer"
+              ]
+            }
+          }
+        },
+        "persistence": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "string"
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "accessModes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "className": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "string"
+        },
+        "annotations": {
+          "type": "object"
+        },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "secretName": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "mediaServer": {
+      "type": "string",
+      "enum": [
+        "plex",
+        "jellyfin",
+        "emby",
+        "none"
+      ]
+    },
+    "appDefaults": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            },
+            "annotations": {
+              "type": "object"
+            }
+          }
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "hostname": {
+              "type": "string"
+            }
+          }
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "string"
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "existingClaim": {
+              "type": "string"
+            }
+          }
+        },
+        "mountMedia": {
+          "type": "boolean"
+        },
+        "mediaReadOnly": {
+          "type": "boolean"
+        },
+        "env": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "resources": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "podAnnotations": {
+          "type": "object"
+        },
+        "securityContext": {
+          "type": "object"
+        },
+        "extraVolumes": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "extraVolumeMounts": {
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      }
+    },
+    "sonarr": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            },
+            "annotations": {
+              "type": "object"
+            }
+          }
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "hostname": {
+              "type": "string"
+            }
+          }
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "string"
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "existingClaim": {
+              "type": "string"
+            }
+          }
+        },
+        "mountMedia": {
+          "type": "boolean"
+        },
+        "mediaReadOnly": {
+          "type": "boolean"
+        },
+        "env": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "resources": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "podAnnotations": {
+          "type": "object"
+        },
+        "securityContext": {
+          "type": "object"
+        },
+        "extraVolumes": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "extraVolumeMounts": {
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      }
+    },
+    "radarr": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            },
+            "annotations": {
+              "type": "object"
+            }
+          }
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "hostname": {
+              "type": "string"
+            }
+          }
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "string"
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "existingClaim": {
+              "type": "string"
+            }
+          }
+        },
+        "mountMedia": {
+          "type": "boolean"
+        },
+        "mediaReadOnly": {
+          "type": "boolean"
+        },
+        "env": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "resources": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "podAnnotations": {
+          "type": "object"
+        },
+        "securityContext": {
+          "type": "object"
+        },
+        "extraVolumes": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "extraVolumeMounts": {
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      }
+    },
+    "lidarr": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            },
+            "annotations": {
+              "type": "object"
+            }
+          }
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "hostname": {
+              "type": "string"
+            }
+          }
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "string"
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "existingClaim": {
+              "type": "string"
+            }
+          }
+        },
+        "mountMedia": {
+          "type": "boolean"
+        },
+        "mediaReadOnly": {
+          "type": "boolean"
+        },
+        "env": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "resources": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "podAnnotations": {
+          "type": "object"
+        },
+        "securityContext": {
+          "type": "object"
+        },
+        "extraVolumes": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "extraVolumeMounts": {
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      }
+    },
+    "bazarr": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            },
+            "annotations": {
+              "type": "object"
+            }
+          }
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "hostname": {
+              "type": "string"
+            }
+          }
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "string"
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "existingClaim": {
+              "type": "string"
+            }
+          }
+        },
+        "mountMedia": {
+          "type": "boolean"
+        },
+        "mediaReadOnly": {
+          "type": "boolean"
+        },
+        "env": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "resources": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "podAnnotations": {
+          "type": "object"
+        },
+        "securityContext": {
+          "type": "object"
+        },
+        "extraVolumes": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "extraVolumeMounts": {
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      }
+    },
+    "prowlarr": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            },
+            "annotations": {
+              "type": "object"
+            }
+          }
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "hostname": {
+              "type": "string"
+            }
+          }
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "string"
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "existingClaim": {
+              "type": "string"
+            }
+          }
+        },
+        "mountMedia": {
+          "type": "boolean"
+        },
+        "mediaReadOnly": {
+          "type": "boolean"
+        },
+        "env": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "resources": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "podAnnotations": {
+          "type": "object"
+        },
+        "securityContext": {
+          "type": "object"
+        },
+        "extraVolumes": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "extraVolumeMounts": {
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      }
+    },
+    "jackett": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            },
+            "annotations": {
+              "type": "object"
+            }
+          }
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "hostname": {
+              "type": "string"
+            }
+          }
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "string"
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "existingClaim": {
+              "type": "string"
+            }
+          }
+        },
+        "mountMedia": {
+          "type": "boolean"
+        },
+        "mediaReadOnly": {
+          "type": "boolean"
+        },
+        "env": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "resources": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "podAnnotations": {
+          "type": "object"
+        },
+        "securityContext": {
+          "type": "object"
+        },
+        "extraVolumes": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "extraVolumeMounts": {
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      }
+    },
+    "jellyfin": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            },
+            "annotations": {
+              "type": "object"
+            }
+          }
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "hostname": {
+              "type": "string"
+            }
+          }
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "string"
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "existingClaim": {
+              "type": "string"
+            }
+          }
+        },
+        "mountMedia": {
+          "type": "boolean"
+        },
+        "mediaReadOnly": {
+          "type": "boolean"
+        },
+        "env": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "resources": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "podAnnotations": {
+          "type": "object"
+        },
+        "securityContext": {
+          "type": "object"
+        },
+        "extraVolumes": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "extraVolumeMounts": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "publishedServerUrl": {
+          "type": "string"
+        }
+      }
+    },
+    "emby": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            },
+            "annotations": {
+              "type": "object"
+            }
+          }
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "hostname": {
+              "type": "string"
+            }
+          }
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "string"
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "existingClaim": {
+              "type": "string"
+            }
+          }
+        },
+        "mountMedia": {
+          "type": "boolean"
+        },
+        "mediaReadOnly": {
+          "type": "boolean"
+        },
+        "env": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "resources": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "podAnnotations": {
+          "type": "object"
+        },
+        "securityContext": {
+          "type": "object"
+        },
+        "extraVolumes": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "extraVolumeMounts": {
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      }
+    },
+    "plex": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            },
+            "annotations": {
+              "type": "object"
+            }
+          }
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "hostname": {
+              "type": "string"
+            }
+          }
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "size": {
+              "type": "string"
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "existingClaim": {
+              "type": "string"
+            }
+          }
+        },
+        "mountMedia": {
+          "type": "boolean"
+        },
+        "mediaReadOnly": {
+          "type": "boolean"
+        },
+        "env": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "resources": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "podAnnotations": {
+          "type": "object"
+        },
+        "securityContext": {
+          "type": "object"
+        },
+        "extraVolumes": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "extraVolumeMounts": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "claimToken": {
+          "type": "string"
+        },
+        "claimSecret": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            }
+          }
+        },
+        "advertiseUrl": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,188 @@
+# Default values for kube-arr.
+#
+# Every app is optional. Each one gets its own Deployment, Service and
+# config volume, and they all share one media volume mounted at the same
+# path, so Sonarr and Radarr can hardlink or instantly move finished
+# downloads into your library instead of copying them.
+
+global:
+  # Passed to every LinuxServer.io image so files are owned consistently.
+  timezone: Etc/UTC
+  puid: 1000
+  pgid: 1000
+  umask: "002"
+  imagePullSecrets: []
+  # Keep all apps on the same node. Required when the media volume is
+  # ReadWriteOnce (the default). Turn off if you use NFS or a ReadWriteMany volume.
+  colocate: true
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  nodeSelector:
+    kubernetes.io/os: linux
+  tolerations: []
+
+# The shared media and downloads volume, mounted at the same path in every app.
+# Use ONE source: existingClaim, nfs, hostPath, or leave them all empty to
+# have the chart create a PersistentVolumeClaim.
+#
+# Suggested layout inside it:
+#   /data/media/tv  /data/media/movies  /data/media/music  /data/downloads
+media:
+  mountPath: /data
+  existingClaim: ""
+  nfs:
+    server: ""
+    path: ""
+  hostPath:
+    # e.g. a kube-rclone mount like /mnt/disks/gdrive
+    path: ""
+    # HostToContainer lets pods see FUSE mounts made on the node (kube-rclone).
+    mountPropagation: HostToContainer
+  persistence:
+    size: 500Gi
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+
+# Optional Ingress. With a domain set, each enabled app is served at
+# <app>.<domain>, e.g. sonarr.home.example.com. Set ingress.hostname on an
+# app to override. Turn on authentication in each app before exposing it.
+ingress:
+  enabled: false
+  className: ""
+  domain: ""
+  annotations: {}
+  tls:
+    enabled: false
+    # One wildcard or SAN certificate for all hosts. Leave empty to let
+    # cert-manager (via annotations) create one per app.
+    secretName: ""
+
+# Which media server to run: plex, jellyfin, emby or none.
+mediaServer: jellyfin
+
+# Settings every app starts from. Anything here can be overridden per app.
+appDefaults:
+  image:
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    annotations: {}
+  ingress:
+    enabled: true   # only used when ingress.enabled is true
+    hostname: ""
+  config:
+    size: 2Gi
+    storageClass: ""
+    existingClaim: ""
+  # Mount the shared media volume, and whether read-only (media servers only need to read).
+  mountMedia: true
+  mediaReadOnly: false
+  env: []
+  resources: {}
+  podAnnotations: {}
+  securityContext: {}
+  extraVolumes: []
+  extraVolumeMounts: []
+
+# --- Library managers --------------------------------------------------------
+
+sonarr:          # TV shows
+  enabled: true
+  port: 8989
+  image:
+    repository: lscr.io/linuxserver/sonarr
+    tag: version-4.0.20.3014
+
+radarr:          # Movies
+  enabled: true
+  port: 7878
+  image:
+    repository: lscr.io/linuxserver/radarr
+    tag: version-6.4.4.10685
+
+lidarr:          # Music
+  enabled: false
+  port: 8686
+  image:
+    repository: lscr.io/linuxserver/lidarr
+    tag: version-3.1.0.4875
+
+bazarr:          # Subtitles for Sonarr and Radarr
+  enabled: true
+  port: 6767
+  image:
+    repository: lscr.io/linuxserver/bazarr
+    tag: version-v1.6.1
+
+# --- Indexers ----------------------------------------------------------------
+
+prowlarr:        # Indexer manager; syncs indexers into Sonarr, Radarr and Lidarr
+  enabled: true
+  port: 9696
+  image:
+    repository: lscr.io/linuxserver/prowlarr
+    tag: version-2.6.5.5623
+  # Prowlarr doesn't touch media files.
+  mountMedia: false
+
+jackett:         # Alternative indexer proxy (Prowlarr covers most setups)
+  enabled: false
+  port: 9117
+  image:
+    repository: lscr.io/linuxserver/jackett
+    tag: version-v0.24.2865
+  mountMedia: false
+
+# --- Media servers (pick one with mediaServer) -------------------------------
+
+plex:
+  port: 32400
+  image:
+    repository: lscr.io/linuxserver/plex
+    tag: version-1.43.4.10903-e5521bd8c
+  mediaReadOnly: true
+  config:
+    size: 20Gi
+  # Claim the server to your Plex account on first start. Get a token from
+  # https://plex.tv/claim (valid for 4 minutes). Prefer claimSecret.
+  claimToken: ""
+  claimSecret:
+    name: ""
+    key: PLEX_CLAIM
+  # Address clients should use, e.g. "https://plex.home.example.com:443"
+  advertiseUrl: ""
+
+jellyfin:
+  port: 8096
+  image:
+    repository: lscr.io/linuxserver/jellyfin
+    tag: version-12.2ubu2604
+  mediaReadOnly: true
+  config:
+    size: 10Gi
+  # e.g. "https://jellyfin.home.example.com"
+  publishedServerUrl: ""
+
+emby:
+  port: 8096
+  image:
+    repository: lscr.io/linuxserver/emby
+    tag: version-4.10.1.0
+  mediaReadOnly: true
+  config:
+    size: 10Gi
+
+# Hardware transcoding example (Intel/AMD VAAPI) for the media server:
+#
+# jellyfin:
+#   extraVolumes:
+#     - name: dri
+#       hostPath:
+#         path: /dev/dri
+#   extraVolumeMounts:
+#     - name: dri
+#       mountPath: /dev/dri
+#   securityContext:
+#     privileged: true

@@ -1,0 +1,28 @@
+apiVersion: v2
+name: kube-arr
+description: Your *arr media stack on Kubernetes. Sonarr, Radarr, Prowlarr, Bazarr, Jackett, Lidarr and Plex, Jellyfin or Emby, each optional, sharing one media volume
+type: application
+version: 0.1.0
+appVersion: "2026.10"
+kubeVersion: ">=1.25.0-0"
+keywords:
+  - sonarr
+  - radarr
+  - prowlarr
+  - bazarr
+  - jackett
+  - lidarr
+  - plex
+  - jellyfin
+  - emby
+  - media
+  - homelab
+  - arr
+home: https://github.com/simplyzee/kube-arr
+sources:
+  - https://github.com/simplyzee/kube-arr
+  - https://github.com/linuxserver
+maintainers:
+  - name: simplyzee
+    email: zee@simplyzee.dev
+    url: https://simplyzee.dev

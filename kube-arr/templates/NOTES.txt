@@ -1,0 +1,37 @@
+{{- $apps := include "kube-arr.enabledApps" . | fromJsonArray -}}
+kube-arr is running {{ len $apps }} app(s) in {{ .Release.Namespace }}.
+
+Addresses inside the cluster (use these when connecting apps to each other):
+{{- range $name := $apps }}
+{{- $ctx := dict "root" $ "name" $name }}
+{{- $app := include "kube-arr.app" $ctx | fromYaml }}
+  {{ printf "%-9s" $name }} http://{{ include "kube-arr.appName" $ctx }}:{{ $app.port }}
+{{- end }}
+{{- if .Values.ingress.enabled }}
+
+From your browser:
+{{- range $name := $apps }}
+{{- $app := include "kube-arr.app" (dict "root" $ "name" $name) | fromYaml }}
+{{- if $app.ingress.enabled }}
+  {{ printf "%-9s" $name }} http{{ if $.Values.ingress.tls.enabled }}s{{ end }}://{{ $app.ingress.hostname | default (printf "%s.%s" $name $.Values.ingress.domain) }}
+{{- end }}
+{{- end }}
+{{- else }}
+
+Open one in your browser with a port-forward, e.g.:
+{{- $first := first $apps }}
+{{- $app := include "kube-arr.app" (dict "root" . "name" $first) | fromYaml }}
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "kube-arr.appName" (dict "root" . "name" $first) }} {{ $app.port }}
+  then visit http://localhost:{{ $app.port }}
+{{- end }}
+
+Every app sees the shared media volume at {{ .Values.media.mountPath }}. Point
+download clients, root folders and libraries inside it, e.g.
+{{ .Values.media.mountPath }}/media/tv and {{ .Values.media.mountPath }}/downloads, so imports are instant moves.
+{{- if has "prowlarr" $apps }}
+
+In Prowlarr, add Sonarr, Radarr and Lidarr under Settings > Apps using the
+addresses above, and it will sync your indexers to them.
+{{- end }}
+
+Set up authentication in each app before exposing it outside the cluster.

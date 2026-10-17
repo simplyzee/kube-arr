@@ -1,0 +1,10 @@
+# CI: bring-your-own volumes, no media server, Jellyfin URL ignored when off.
+media:
+  existingClaim: media-library
+  mountPath: /mnt/media
+sonarr:
+  config:
+    existingClaim: sonarr-config
+radarr:
+  enabled: false
+mediaServer: none
