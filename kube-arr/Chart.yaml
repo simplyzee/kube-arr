@@ -2,7 +2,7 @@ apiVersion: v2
 name: kube-arr
 description: Your *arr media stack on Kubernetes. Sonarr, Radarr, Prowlarr, Bazarr, Jackett, Lidarr and Plex, Jellyfin or Emby, each optional, sharing one media volume
 type: application
-version: 0.1.0
+version: 0.1.1
 appVersion: "2026.10"
 kubeVersion: ">=1.25.0-0"
 keywords:
@@ -26,3 +26,33 @@ maintainers:
   - name: simplyzee
     email: zee@simplyzee.dev
     url: https://simplyzee.dev
+annotations:
+  artifacthub.io/license: Apache-2.0
+  # Keep in sync with values.yaml; CI checks this matches the rendered chart.
+  artifacthub.io/images: |
+    - name: sonarr
+      image: lscr.io/linuxserver/sonarr:version-4.0.20.3014
+    - name: radarr
+      image: lscr.io/linuxserver/radarr:version-6.4.4.10685
+    - name: lidarr
+      image: lscr.io/linuxserver/lidarr:version-3.1.0.4875
+    - name: bazarr
+      image: lscr.io/linuxserver/bazarr:version-v1.6.1
+    - name: prowlarr
+      image: lscr.io/linuxserver/prowlarr:version-2.6.5.5623
+    - name: jackett
+      image: lscr.io/linuxserver/jackett:version-v0.24.2865
+    - name: plex
+      image: lscr.io/linuxserver/plex:version-1.43.4.10903-e5521bd8c
+    - name: jellyfin
+      image: lscr.io/linuxserver/jellyfin:version-12.2ubu2604
+    - name: emby
+      image: lscr.io/linuxserver/emby:version-4.10.1.0
+  artifacthub.io/links: |
+    - name: support
+      url: https://github.com/simplyzee/kube-arr/issues
+    - name: kube-rclone (mount cloud storage as the media volume)
+      url: https://github.com/simplyzee/kube-rclone
+  artifacthub.io/changes: |
+    - kind: added
+      description: Artifact Hub metadata listing every app image for security scanning

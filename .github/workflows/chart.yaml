@@ -47,6 +47,13 @@ jobs:
           [ "$(count kube-arr/ci/existing-claims-values.yaml)" = 3 ]          # sonarr bazarr prowlarr
           helm template media kube-arr -f kube-arr/ci/everything-plex-ingress-values.yaml | grep -q 'host: "sonarr.home.example.com"'
 
+      - name: Artifact Hub image list matches the chart
+        run: |
+          python3 .github/scripts/check-artifacthub-images.py kube-arr \
+            kube-arr/ci/defaults-values.yaml \
+            kube-arr/ci/everything-plex-ingress-values.yaml \
+            kube-arr/ci/rclone-emby-values.yaml
+
       - name: Bad values fail with clear messages
         run: |
           expect_fail() {
