@@ -25,6 +25,19 @@ Open one in your browser with a port-forward, e.g.:
   then visit http://localhost:{{ $app.port }}
 {{- end }}
 
+{{ if .Values.rclone.enabled -}}
+kube-rclone is mounting {{ .Values.rclone.rclone.remote }} at {{ .Values.rclone.rclone.path }} on every node,
+and that is the shared media volume below. Check the mount with:
+
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/name=rclone,app.kubernetes.io/instance={{ .Release.Name }}
+{{- $uid := printf "--uid=%v" .Values.global.puid }}
+{{- if not (has $uid .Values.rclone.rclone.additionalArgs) }}
+
+Warning: rclone.rclone.additionalArgs doesn't include {{ $uid }}, so the apps
+(running as UID {{ .Values.global.puid }}) may not be able to write to the mount.
+{{- end }}
+
+{{ end -}}
 Every app sees the shared media volume at {{ .Values.media.mountPath }}. Point
 download clients, root folders and libraries inside it, e.g.
 {{ .Values.media.mountPath }}/media/tv and {{ .Values.media.mountPath }}/downloads, so imports are instant moves.

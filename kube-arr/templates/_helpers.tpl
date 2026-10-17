@@ -75,10 +75,12 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
 {{/*
-Which media source is in use: claim, nfs, hostPath or managed (chart-created PVC).
+Which media source is in use: rclone (kube-rclone mount), claim, nfs,
+hostPath or managed (chart-created PVC).
 */}}
 {{- define "kube-arr.mediaSource" -}}
-{{- if .Values.media.existingClaim -}}claim
+{{- if .Values.rclone.enabled -}}rclone
+{{- else if .Values.media.existingClaim -}}claim
 {{- else if .Values.media.nfs.server -}}nfs
 {{- else if .Values.media.hostPath.path -}}hostPath
 {{- else -}}managed
@@ -96,8 +98,18 @@ Fail early with clear messages.
 {{- if .Values.media.existingClaim }}{{ $sources = add1 $sources }}{{ end -}}
 {{- if .Values.media.nfs.server }}{{ $sources = add1 $sources }}{{ end -}}
 {{- if .Values.media.hostPath.path }}{{ $sources = add1 $sources }}{{ end -}}
+{{- if .Values.rclone.enabled }}{{ $sources = add1 $sources }}{{ end -}}
 {{- if gt $sources 1 -}}
-{{- fail "kube-arr: set only one of media.existingClaim, media.nfs.server or media.hostPath.path" -}}
+{{- fail "kube-arr: set only one of media.existingClaim, media.nfs.server, media.hostPath.path or rclone.enabled" -}}
+{{- end -}}
+{{- if .Values.rclone.enabled -}}
+{{- $r := .Values.rclone.rclone -}}
+{{- if not (or $r.config $r.existingSecret) -}}
+{{- fail "kube-arr: rclone.enabled needs your rclone config. Pass it with --set-file rclone.rclone.config=./rclone.conf or set rclone.rclone.existingSecret" -}}
+{{- end -}}
+{{- if not (hasPrefix "/" $r.path) -}}
+{{- fail "kube-arr: rclone.rclone.path must be an absolute path on the node, e.g. /mnt/disks/rclone" -}}
+{{- end -}}
 {{- end -}}
 {{- if and .Values.media.nfs.server (not .Values.media.nfs.path) -}}
 {{- fail "kube-arr: media.nfs.path is required when media.nfs.server is set" -}}

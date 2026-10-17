@@ -63,11 +63,37 @@ Pick one source:
 | New PVC (default) | `media.persistence.size`, `.storageClass`, `.accessModes` | Single-node clusters |
 | Existing PVC | `media.existingClaim: my-media` | You already have a volume |
 | NFS | `media.nfs.server`, `media.nfs.path` | A NAS; works across nodes |
-| Host path | `media.hostPath.path: /mnt/disks/gdrive` | A disk on the node, or a [kube-rclone](https://github.com/simplyzee/kube-rclone) mount |
+| Host path | `media.hostPath.path: /mnt/disks/gdrive` | A disk on the node, or a kube-rclone you run separately |
+| Cloud storage | `rclone.enabled: true` | Google Drive, S3, Dropbox and more, via the built-in [kube-rclone](https://github.com/simplyzee/kube-rclone) (see below) |
 
 `global.colocate` (on by default) keeps every app on the same node, which a ReadWriteOnce volume needs. Turn it off with NFS or a ReadWriteMany volume to spread the apps across nodes.
 
 Media servers mount the volume read-only. Prowlarr and Jackett don't mount it at all.
+
+## Cloud storage with kube-rclone
+
+kube-arr can run [kube-rclone](https://github.com/simplyzee/kube-rclone) for you. It mounts any [rclone remote](https://rclone.org/overview/) on every node, and every app uses that mount as its media volume.
+
+1. Create an rclone config on your own machine with `rclone config`.
+2. Install with rclone switched on:
+
+```bash
+helm install media simplyzee/kube-arr -n media --create-namespace \
+  --set rclone.enabled=true \
+  --set-file rclone.rclone.config=./rclone.conf \
+  --set rclone.rclone.remote=gdrive:media
+```
+
+The remote is mounted at `/mnt/disks/rclone` on each node and appears as `/data` in every app. Your config is stored in a Secret; use `rclone.rclone.existingSecret` to manage it yourself instead.
+
+The defaults suit the *arr apps:
+- The mount is **read-write**, so imports and renames work.
+- It uses the **full VFS cache** (`--vfs-cache-mode=full`, up to 50G on each node) so apps can seek and stream.
+- Files are owned by **UID/GID 1000** with umask `002`.
+
+If you change `global.puid`, `global.pgid` or `global.umask`, update `--uid`, `--gid` and `--umask` in `rclone.rclone.additionalArgs` to match. The install notes warn you if they don't.
+
+Every [kube-rclone setting](https://github.com/simplyzee/kube-rclone/blob/master/kube-rclone/README.md#parameters) can be set under `rclone:`, for example `rclone.resources` or `rclone.rclone.cacheDir`.
 
 ## Connecting the apps
 
@@ -163,6 +189,19 @@ jellyfin:
 | `media.hostPath.path` | Use a directory on the node | `""` |
 | `media.hostPath.mountPropagation` | `HostToContainer` lets pods see FUSE mounts such as kube-rclone | `HostToContainer` |
 | `media.persistence.size`, `.storageClass`, `.accessModes` | Chart-created PVC | `500Gi`, `""`, `[ReadWriteOnce]` |
+
+### Cloud storage (kube-rclone)
+
+| Parameter | Description | Default |
+|---|---|---|
+| `rclone.enabled` | Run kube-rclone and use its mount as the media volume | `false` |
+| `rclone.rclone.remote` | Remote (and path) from your rclone config | `gdrive:` |
+| `rclone.rclone.path` | Where it's mounted on each node | `/mnt/disks/rclone` |
+| `rclone.rclone.config` | rclone config contents (use `--set-file`) | `""` |
+| `rclone.rclone.existingSecret` | Use your own Secret for the config instead | `""` |
+| `rclone.rclone.readOnly` | Mount read-only | `false` |
+| `rclone.rclone.additionalArgs` | rclone mount flags | VFS full cache, 50G, `--uid=1000 --gid=1000 --umask=002` |
+| `rclone.*` | Any other kube-rclone setting | see kube-rclone |
 
 ### Ingress
 

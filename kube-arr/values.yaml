@@ -23,8 +23,8 @@ global:
   tolerations: []
 
 # The shared media and downloads volume, mounted at the same path in every app.
-# Use ONE source: existingClaim, nfs, hostPath, or leave them all empty to
-# have the chart create a PersistentVolumeClaim.
+# Use ONE source: existingClaim, nfs, hostPath, rclone.enabled (below), or
+# leave them all empty to have the chart create a PersistentVolumeClaim.
 #
 # Suggested layout inside it:
 #   /data/media/tv  /data/media/movies  /data/media/music  /data/downloads
@@ -44,6 +44,34 @@ media:
     storageClass: ""
     accessModes:
       - ReadWriteOnce
+
+# Mount cloud storage with kube-rclone and use it as the media volume.
+# When enabled, kube-rclone runs a DaemonSet that mounts rclone.rclone.remote
+# at rclone.rclone.path on every node, and every app here mounts that path.
+# All kube-rclone settings go under rclone: (see its README).
+rclone:
+  enabled: false
+  rclone:
+    # Remote (and optional path) from your rclone config, e.g. "gdrive:media".
+    remote: "gdrive:"
+    # Where the remote is mounted on each node.
+    path: /mnt/disks/rclone
+    # The *arr apps need to write (imports, renames), so mount read-write.
+    readOnly: false
+    # Pass your config at install time with
+    #   --set-file rclone.rclone.config=./rclone.conf
+    # or keep it in your own Secret with rclone.rclone.existingSecret.
+    config: ""
+    existingSecret: ""
+    # Recommended for *arr apps. Keep --uid/--gid/--umask in step with
+    # global.puid, global.pgid and global.umask so the apps own the files.
+    additionalArgs:
+      - --vfs-cache-mode=full
+      - --vfs-cache-max-size=50G
+      - --dir-cache-time=72h
+      - --uid=1000
+      - --gid=1000
+      - --umask=002
 
 # Optional Ingress. With a domain set, each enabled app is served at
 # <app>.<domain>, e.g. sonarr.home.example.com. Set ingress.hostname on an

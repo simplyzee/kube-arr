@@ -1278,6 +1278,43 @@
           "type": "string"
         }
       }
+    },
+    "rclone": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "rclone": {
+          "type": "object",
+          "properties": {
+            "remote": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "readOnly": {
+              "type": "boolean"
+            },
+            "config": {
+              "type": "string"
+            },
+            "existingSecret": {
+              "type": "string"
+            },
+            "additionalArgs": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
