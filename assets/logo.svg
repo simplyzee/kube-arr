@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>kube-arr</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4338CA"/>
+      <stop offset="1" stop-color="#0891B2"/>
+    </linearGradient>
+  </defs>
+  <path d="M226.6,37.0 Q256.0,20.0 285.4,37.0 L430.9,121.0 Q460.4,138.0 460.4,172.0 L460.4,340.0 Q460.4,374.0 430.9,391.0 L285.4,475.0 Q256.0,492.0 226.6,475.0 L81.1,391.0 Q51.6,374.0 51.6,340.0 L51.6,172.0 Q51.6,138.0 81.1,121.0 Z" fill="url(#bg)"/>
+  <!-- the stack: apps queueing media into the server -->
+  <rect x="104" y="186" width="118" height="30" rx="15" fill="#fff" opacity=".55"/>
+  <rect x="88"  y="241" width="134" height="30" rx="15" fill="#fff" opacity=".75"/>
+  <rect x="104" y="296" width="118" height="30" rx="15" fill="#fff" opacity=".55"/>
+  <!-- the media server: play -->
+  <path d="M250 158 Q250 140 266 149 L410 238 Q426 256 410 274 L266 363 Q250 372 250 354 Z" fill="#fff"/>
+</svg>
