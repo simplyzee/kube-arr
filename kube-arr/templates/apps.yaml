@@ -152,6 +152,9 @@ spec:
               {{- end }}
               {{- if eq $mediaSource "hostPath" }}
               mountPropagation: {{ $.Values.media.hostPath.mountPropagation }}
+              {{- else if eq $mediaSource "rclone" }}
+              # See the FUSE mount kube-rclone makes on the node.
+              mountPropagation: HostToContainer
               {{- end }}
             {{- end }}
             {{- with $app.extraVolumeMounts }}
@@ -171,6 +174,11 @@ spec:
           hostPath:
             path: {{ $.Values.media.hostPath.path }}
             type: Directory
+          {{- else if eq $mediaSource "rclone" }}
+          hostPath:
+            # Mounted by the kube-rclone DaemonSet on every node.
+            path: {{ $.Values.rclone.rclone.path }}
+            type: DirectoryOrCreate
           {{- else }}
           persistentVolumeClaim:
             claimName: {{ include "kube-arr.mediaClaimName" $ }}

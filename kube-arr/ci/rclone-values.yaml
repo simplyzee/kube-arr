@@ -1,0 +1,13 @@
+# CI: kube-rclone as the media volume, Plex, chart-managed rclone config.
+rclone:
+  enabled: true
+  rclone:
+    remote: "gdrive:media"
+    path: /mnt/disks/gdrive
+    config: |
+      [gdrive]
+      type = drive
+      scope = drive
+mediaServer: plex
+lidarr:
+  enabled: true

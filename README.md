@@ -11,7 +11,8 @@ helm install media simplyzee/kube-arr -n media --create-namespace \
 ## Why kube-arr
 
 - **One install, any mix of apps.** Switch each app on or off, and choose Plex, Jellyfin, Emby or no media server.
-- **One shared media volume** mounted at the same path everywhere, so imports are instant moves or hardlinks, not copies. It can be a new PVC, an existing one, NFS, a disk on the node, or a [kube-rclone](https://github.com/simplyzee/kube-rclone) mount.
+- **One shared media volume** mounted at the same path everywhere, so imports are instant moves or hardlinks, not copies. It can be a new PVC, an existing one, NFS, or a disk on the node.
+- **Built-in cloud storage.** Set `rclone.enabled=true` and kube-arr runs [kube-rclone](https://github.com/simplyzee/kube-rclone) for you, mounting Google Drive, S3, Dropbox or any rclone remote on every node as your media library.
 - **The apps find each other.** Each gets a stable in-cluster address, such as `http://media-sonarr:8989`, ready to paste into Prowlarr or Bazarr.
 - **Your data is safe.** Config and media volumes are kept when you uninstall.
 - **Ready to expose.** Set `ingress.domain` and each app appears at `sonarr.<domain>`, `radarr.<domain>` and so on, with TLS.

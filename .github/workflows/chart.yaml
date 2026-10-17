@@ -16,6 +16,11 @@ jobs:
 
       - uses: azure/setup-helm@v4
 
+      - name: Fetch chart dependencies (kube-rclone)
+        run: |
+          helm repo add simplyzee https://charts.simplyzee.dev
+          helm dependency update kube-arr
+
       - name: Install kubeconform
         run: |
           curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
@@ -45,6 +50,9 @@ jobs:
           [ "$(count kube-arr/ci/defaults-values.yaml)" = 5 ]                 # sonarr radarr bazarr prowlarr jellyfin
           [ "$(count kube-arr/ci/everything-plex-ingress-values.yaml)" = 7 ]  # all six + plex
           [ "$(count kube-arr/ci/existing-claims-values.yaml)" = 3 ]          # sonarr bazarr prowlarr
+          helm template media kube-arr -f kube-arr/ci/rclone-values.yaml | grep -q '^kind: DaemonSet'
+          helm template media kube-arr -f kube-arr/ci/rclone-values.yaml | grep -q 'mountPropagation: HostToContainer'
+          ! helm template media kube-arr | grep -q '^kind: DaemonSet'   # rclone off by default
           helm template media kube-arr -f kube-arr/ci/everything-plex-ingress-values.yaml | grep -q 'host: "sonarr.home.example.com"'
 
       - name: Artifact Hub image list matches the chart
@@ -52,7 +60,8 @@ jobs:
           python3 .github/scripts/check-artifacthub-images.py kube-arr \
             kube-arr/ci/defaults-values.yaml \
             kube-arr/ci/everything-plex-ingress-values.yaml \
-            kube-arr/ci/rclone-emby-values.yaml
+            kube-arr/ci/rclone-emby-values.yaml \
+            kube-arr/ci/rclone-values.yaml
 
       - name: Bad values fail with clear messages
         run: |
@@ -72,6 +81,10 @@ jobs:
           expect_fail --set sonarr.enabled=false --set radarr.enabled=false --set bazarr.enabled=false \
                       --set prowlarr.enabled=false --set mediaServer=none
           grep -q "no apps are enabled" err.txt
+          expect_fail --set rclone.enabled=true
+          grep -q "needs your rclone config" err.txt
+          expect_fail -f kube-arr/ci/rclone-values.yaml --set media.hostPath.path=/mnt/x
+          grep -q "only one of" err.txt
 
       - name: Package
         run: helm package kube-arr --destination dist
@@ -91,6 +104,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: azure/setup-helm@v4
+
+      - name: Fetch chart dependencies (kube-rclone)
+        run: |
+          helm repo add simplyzee https://charts.simplyzee.dev
+          helm dependency update kube-arr
 
       - uses: helm/kind-action@v1
 
@@ -134,3 +152,52 @@ jobs:
           kubectl get pods,pvc,svc -o wide
           kubectl describe pods
           for d in $(kubectl get deploy -o name); do echo "== $d"; kubectl logs "$d" --tail=50 || true; done
+
+  rclone-smoke-test:
+    # Installs the stack with kube-rclone in kind, using rclone's in-memory
+    # backend, and checks files written by the apps go through the FUSE mount.
+    needs: lint-and-validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Fetch chart dependencies (kube-rclone)
+        run: |
+          helm repo add simplyzee https://charts.simplyzee.dev
+          helm dependency update kube-arr
+
+      - uses: helm/kind-action@v1
+
+      - name: Install the stack on a kube-rclone mount
+        run: |
+          printf '[mem]\ntype = memory\n' > rclone.conf
+          helm install media kube-arr --wait --timeout 15m \
+            --set rclone.enabled=true \
+            --set rclone.rclone.remote=mem:media \
+            --set-file rclone.rclone.config=rclone.conf \
+            --set mediaServer=none \
+            --set bazarr.enabled=false \
+            --set prowlarr.enabled=false \
+            --set appDefaults.config.size=256Mi
+          kubectl get pods -o wide
+
+      - name: Apps write through the rclone mount
+        run: |
+          kubectl exec deploy/media-sonarr -- sh -c 'grep " /data " /proc/mounts'
+          kubectl exec deploy/media-sonarr -- sh -c 'grep " /data " /proc/mounts | grep -q rclone'
+          kubectl exec deploy/media-sonarr -- sh -c 'mkdir -p /data/media/tv && echo hello > /data/media/tv/check.txt'
+          kubectl exec deploy/media-radarr -- cat /data/media/tv/check.txt | grep -q hello
+          kubectl exec ds/media-rclone -c rclone -- cat /mnt/disks/rclone/media/tv/check.txt | grep -q hello
+          echo "Sonarr wrote through rclone; Radarr and the rclone pod both see it"
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods,ds,svc,secret -o wide
+          kubectl describe pods
+          kubectl logs ds/media-rclone -c rclone --tail=100 || true
+          for d in $(kubectl get deploy -o name); do echo "== $d"; kubectl logs "$d" --tail=50 || true; done
+
