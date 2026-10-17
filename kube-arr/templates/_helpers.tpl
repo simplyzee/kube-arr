@@ -122,7 +122,190 @@ Fail early with clear messages.
 {{- end -}}
 {{- end -}}
 {{- end -}}
+{{- if and .Values.transcode.enabled (eq .Values.mediaServer "none") -}}
+{{- fail "kube-arr: transcode.enabled needs a media server. Set mediaServer to plex, jellyfin or emby" -}}
+{{- end -}}
 {{- if not (include "kube-arr.enabledApps" . | fromJsonArray) -}}
 {{- fail "kube-arr: no apps are enabled. Enable at least one, e.g. --set sonarr.enabled=true" -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+The shared media volume (a list item without the leading "- "), used by the
+apps and by transcode pods.
+*/}}
+{{- define "kube-arr.mediaVolume" -}}
+{{- $source := include "kube-arr.mediaSource" . -}}
+name: media
+{{- if eq $source "nfs" }}
+nfs:
+  server: {{ .Values.media.nfs.server }}
+  path: {{ .Values.media.nfs.path }}
+{{- else if eq $source "hostPath" }}
+hostPath:
+  path: {{ .Values.media.hostPath.path }}
+  type: Directory
+{{- else if eq $source "rclone" }}
+hostPath:
+  # Mounted by the kube-rclone DaemonSet on every node.
+  path: {{ .Values.rclone.rclone.path }}
+  type: DirectoryOrCreate
+{{- else }}
+persistentVolumeClaim:
+  claimName: {{ include "kube-arr.mediaClaimName" . }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Mount for the shared media volume. Usage:
+include "kube-arr.mediaMount" (dict "root" $ "readOnly" true)
+*/}}
+{{- define "kube-arr.mediaMount" -}}
+{{- $source := include "kube-arr.mediaSource" .root -}}
+name: media
+mountPath: {{ .root.Values.media.mountPath }}
+{{- if .readOnly }}
+readOnly: true
+{{- end }}
+{{- if eq $source "hostPath" }}
+mountPropagation: {{ .root.Values.media.hostPath.mountPropagation }}
+{{- else if eq $source "rclone" }}
+# See the FUSE mount kube-rclone makes on the node.
+mountPropagation: HostToContainer
+{{- end }}
+{{- end -}}
+
+{{/*
+Transcode dispatch is on when enabled and a media server is running.
+*/}}
+{{- define "kube-arr.transcodeEnabled" -}}
+{{- if and .Values.transcode.enabled (has .Values.mediaServer (list "plex" "jellyfin" "emby")) -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+Where each media server image keeps its transcoder.
+*/}}
+{{- define "kube-arr.transcodeBinary" -}}
+{{- $defaults := dict "plex" "/usr/lib/plexmediaserver/Plex Transcoder" "jellyfin" "/usr/lib/jellyfin-ffmpeg/ffmpeg" "emby" "/app/emby/bin/ffmpeg" -}}
+{{- .Values.transcode.binary | default (get $defaults .Values.mediaServer) -}}
+{{- end -}}
+
+{{- define "kube-arr.dispatcherImage" -}}
+{{- $img := .Values.transcode.dispatcher.image -}}
+{{- printf "%s:%s" $img.repository (toString ($img.tag | default .Chart.Version)) -}}
+{{- end -}}
+
+{{/*
+Pod template for transcode pods. The dispatcher fills in the transcode
+container's command, args, env and workingDir.
+*/}}
+{{- define "kube-arr.transcodePodTemplate" -}}
+{{- $server := .Values.mediaServer -}}
+{{- $ctx := dict "root" . "name" $server -}}
+{{- $app := include "kube-arr.app" $ctx | fromYaml -}}
+{{- $fullName := include "kube-arr.appName" $ctx -}}
+{{- $t := .Values.transcode -}}
+metadata:
+  generateName: {{ $fullName }}-transcode-
+  labels:
+    app.kubernetes.io/name: {{ $server }}-transcode
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: {{ include "kube-arr.name" . }}
+    app.kubernetes.io/component: transcode
+  {{- with $t.podAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  restartPolicy: Never
+  activeDeadlineSeconds: {{ int $t.maxDurationSeconds }}
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  {{- with .Values.global.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  securityContext:
+    {{- $psc := deepCopy (.Values.global.podSecurityContext | default dict) }}
+    {{- $_ := set $psc "runAsUser" (int .Values.global.puid) }}
+    {{- $_ := set $psc "runAsGroup" (int .Values.global.pgid) }}
+    {{- toYaml $psc | nindent 4 }}
+  {{- with ($t.nodeSelector | default .Values.global.nodeSelector) }}
+  nodeSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with ($t.tolerations | default .Values.global.tolerations) }}
+  tolerations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if $t.affinity }}
+  affinity:
+    {{- toYaml $t.affinity | nindent 4 }}
+  {{- else if $t.sameNodeAsServer }}
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ $server }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+  {{- end }}
+  containers:
+    - name: transcode
+      image: "{{ $app.image.repository }}:{{ $app.image.tag }}"
+      imagePullPolicy: {{ $app.image.pullPolicy }}
+      env:
+        - name: TZ
+          value: {{ .Values.global.timezone | quote }}
+        {{- with $t.env }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with $t.resources }}
+      resources:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $app.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumeMounts:
+        - name: config
+          mountPath: /config
+        {{- if $app.mountMedia }}
+        - {{- include "kube-arr.mediaMount" (dict "root" . "readOnly" $app.mediaReadOnly) | nindent 10 }}
+        {{- end }}
+        {{- with $app.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+  volumes:
+    - name: config
+      persistentVolumeClaim:
+        claimName: {{ $app.config.existingClaim | default (printf "%s-config" $fullName) }}
+    {{- if $app.mountMedia }}
+    - {{- include "kube-arr.mediaVolume" . | nindent 6 }}
+    {{- end }}
+    {{- with $app.extraVolumes }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end -}}
+
+{{/*
+The dispatcher's config file.
+*/}}
+{{- define "kube-arr.transcodeConfig" -}}
+{{- $server := .Values.mediaServer -}}
+{{- $ctx := dict "root" . "name" $server -}}
+{{- $app := include "kube-arr.app" $ctx | fromYaml -}}
+{{- $cfg := dict
+  "mode" $server
+  "binary" (include "kube-arr.transcodeBinary" .)
+  "fallbackToLocal" .Values.transcode.fallbackToLocal
+  "startTimeoutSeconds" (int .Values.transcode.startTimeoutSeconds)
+  "podTemplate" (include "kube-arr.transcodePodTemplate" . | fromYaml)
+-}}
+{{- if eq $server "plex" -}}
+{{- $_ := set $cfg "serverUrl" (printf "http://%s:%v" (include "kube-arr.appName" $ctx) $app.port) -}}
+{{- end -}}
+{{- toPrettyJson $cfg -}}
 {{- end -}}

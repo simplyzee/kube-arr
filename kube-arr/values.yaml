@@ -90,6 +90,55 @@ ingress:
 # Which media server to run: plex, jellyfin, emby or none.
 mediaServer: jellyfin
 
+# Run transcodes in their own pods instead of inside the media server, like
+# kube-plex but for Plex, Jellyfin and Emby. A small dispatcher replaces the
+# server's transcoder (Plex Transcoder or ffmpeg); each transcode becomes a
+# pod running the real transcoder with the same arguments and volumes, and
+# its progress streams back to the server. Quick checks (version, codecs,
+# hardware) still run locally. Pods are always cleaned up, even if the server
+# kills a transcode.
+#
+# Transcode pods mount the media server's config volume (Plex keeps codecs
+# there; all three keep transcode output there by default). With the default
+# ReadWriteOnce volumes they run on the server's node. To spread them across
+# nodes, use ReadWriteMany storage for the media server's config and media,
+# and set transcode.sameNodeAsServer to false.
+#
+# Plex only: in Settings > Network, add your cluster's pod network to "List of
+# IP addresses and networks that are allowed without auth" so transcode pods
+# can report progress.
+transcode:
+  enabled: false
+  dispatcher:
+    image:
+      repository: ghcr.io/simplyzee/kube-arr-transcoder
+      # Defaults to the chart version.
+      tag: ""
+      pullPolicy: IfNotPresent
+  # Override the transcoder path inside the media server image if needed.
+  binary: ""
+  # Run the transcode in the media server if a pod can't start in time.
+  fallbackToLocal: true
+  startTimeoutSeconds: 60
+  # Hard limit for a single transcode pod.
+  maxDurationSeconds: 21600
+  # Keep transcode pods on the media server's node (needed for ReadWriteOnce
+  # volumes). Set false with ReadWriteMany storage to use the whole cluster.
+  sameNodeAsServer: true
+  resources:
+    requests:
+      cpu: "1"
+      memory: 1Gi
+    limits:
+      memory: 4Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  # Extra env for transcode pods (they already inherit the server's
+  # transcoder environment).
+  env: []
+
 # Settings every app starts from. Anything here can be overridden per app.
 appDefaults:
   image:

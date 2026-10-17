@@ -1,0 +1,62 @@
+{{- if include "kube-arr.transcodeEnabled" . }}
+{{- $ctx := dict "root" . "name" .Values.mediaServer }}
+{{- $fullName := include "kube-arr.appName" $ctx }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "kube-arr.labels" $ctx | nindent 4 }}
+---
+# The media server may only manage pods (its transcodes) in this namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $fullName }}-transcode
+  labels:
+    {{- include "kube-arr.labels" $ctx | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $fullName }}-transcode
+  labels:
+    {{- include "kube-arr.labels" $ctx | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $fullName }}-transcode
+subjects:
+  - kind: ServiceAccount
+    name: {{ $fullName }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullName }}-transcode
+  labels:
+    {{- include "kube-arr.labels" $ctx | nindent 4 }}
+data:
+  transcoder.json: |
+    {{- include "kube-arr.transcodeConfig" . | nindent 4 }}
+  # Runs as root before the media server starts (LinuxServer.io
+  # custom-cont-init.d): swaps the transcoder for the dispatcher.
+  50-kube-arr-transcoder: |
+    #!/bin/sh
+    set -e
+    BIN={{ include "kube-arr.transcodeBinary" . | squote }}
+    if [ ! -e "$BIN.real" ]; then
+      mv "$BIN" "$BIN.real"
+    fi
+    cp /kube-arr/bin/kube-arr-transcoder "$BIN"
+    chmod 755 "$BIN"
+    echo "[kube-arr] transcodes from $BIN now run as Kubernetes pods"
+{{- end }}

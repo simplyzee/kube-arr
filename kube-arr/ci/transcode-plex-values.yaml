@@ -1,0 +1,19 @@
+# CI: Plex with transcode dispatch, spread across GPU nodes.
+mediaServer: plex
+transcode:
+  enabled: true
+  sameNodeAsServer: false
+  nodeSelector:
+    gpu: "true"
+  tolerations:
+    - key: gpu
+      operator: Exists
+      effect: NoSchedule
+plex:
+  extraVolumes:
+    - name: dri
+      hostPath:
+        path: /dev/dri
+  extraVolumeMounts:
+    - name: dri
+      mountPath: /dev/dri
