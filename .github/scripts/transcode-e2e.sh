@@ -40,7 +40,11 @@ run_bin() {
 }
 
 echo "== transcodes the server started by itself (start-up probes)"
-show_pods
+startup=$(show_pods)
+echo "$startup"
+if [ -n "${GITHUB_ACTIONS:-}" ] && [ -n "$startup" ]; then
+  echo "::notice title=$server start-up transcode pods::$(echo "$startup" | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+fi
 wait_no_pods
 
 echo "== the transcoder was swapped for the dispatcher"
