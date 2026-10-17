@@ -82,7 +82,8 @@ jobs:
                       --set prowlarr.enabled=false --set mediaServer=none
           grep -q "no apps are enabled" err.txt
           expect_fail --set rclone.enabled=true
-          grep -q "needs your rclone config" err.txt
+          # kube-arr or kube-rclone may report it first; both explain the fix.
+          grep -Eq "needs your rclone config|no rclone config found" err.txt
           expect_fail -f kube-arr/ci/rclone-values.yaml --set media.hostPath.path=/mnt/x
           grep -q "only one of" err.txt
 
