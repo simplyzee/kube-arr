@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo.svg" alt="" width="120"></p>
+
 # kube-arr
 
 Your *arr media stack on Kubernetes, from one Helm chart. Sonarr, Radarr, Lidarr, Bazarr, Prowlarr, Jackett, and your choice of Jellyfin, Plex or Emby. Every app is optional, they all share one media volume, and they reach each other by name.
